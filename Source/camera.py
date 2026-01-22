@@ -10,7 +10,7 @@ class Camera:
 
     def load_camera(self):
         self.ret, self.frame = self.cap.read()
-        self.frame = cv2.flip(self.frame, 1)
+        self.frame = cv2.flip(self.frame, 0)
         # Desenha a borda da area de calibração
         cv2.line(self.frame, (settings.pontos_calibracao[0]), (settings.pontos_calibracao[1]), (settings.verde), 2)
         cv2.line(self.frame, (settings.pontos_calibracao[1]), (settings.pontos_calibracao[3]), (settings.verde), 2)

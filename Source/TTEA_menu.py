@@ -3,15 +3,19 @@ from tkinter import ttk
 from PIL import Image, ImageTk
 import os
 import arquivo
-from settings import *
+from settings import * # Importa as variáveis globais do settings
 import cv2
 import numpy as np
 import settings
 import pygame
 import subprocess
+import csv # Necessário para ler a configuração
+from importlib import reload # Necessário para reiniciar os jogos sem fechar o menu
 
 from tkinter import messagebox
 
+# Configuração da Janela Principal
+root = tk.Tk()
 
 def center_window_on_screen(width, height):
     screen_width = root.winfo_screenwidth()
@@ -23,13 +27,14 @@ def center_window_on_screen(width, height):
 def show_menu():
     root.title('Menu TTEA')
     arr_Jogadores = ler_nome_jogadores()
-    # set combo values
     jogador_cb['values'] = arr_Jogadores
 
     width, height = 400, 600
     center_window_on_screen(width, height)
     menu_frame.pack()
     cad_frame.forget()
+    
+    # Reseta os campos
     game_cb['state'] = 'readonly'
     game_cb.set('')
     jogador_cb['state'] = 'disabled'
@@ -39,7 +44,6 @@ def show_menu():
     nivel_cb['state'] = 'disabled'
     nivel_cb.set('')
 
-
 def show_cad():
     root.title('Cadastro TTEA')
     width, height = 300, 150
@@ -47,68 +51,62 @@ def show_cad():
     cad_frame.pack()
     menu_frame.forget()
 
-root = tk.Tk()
-
-# config the root window
+# Configuração da Raiz
 root.resizable(False, False)
 root.title('Menu TTEA')
 width, height = 400, 600
-screen_width = root.winfo_screenwidth()
-screen_height = root.winfo_screenheight()
 center_window_on_screen(width, height)
 
-# frames
+# Frames
 menu_frame = tk.Frame(root)
 cad_frame = tk.Frame(root)
 
-# Menu
+# --- LOGO ---
+try:
+    image = Image.open("Assets/TTEA Logo.png")
+    photo = ImageTk.PhotoImage(image)
+    imagem = tk.Label(menu_frame, text = "TTEA Logo", image = photo)
+    imagem.image = photo
+    imagem.pack()
+except:
+    pass
 
-# Logo
-image = Image.open("Assets/TTEA Logo.png")
-photo = ImageTk.PhotoImage(image)
-imagem = tk.Label(menu_frame, text = "TTEA Logo", image = photo)
-imagem.image = photo
-imagem.pack()
-
-
-# Calibrar Button
+# --- BOTÃO CALIBRAR ---
 def CalibrarCallback():
     import calibracao
-
+    reload(calibracao)
 
 B = tk.Button(menu_frame, text ="Calibrar", command = CalibrarCallback)
-
 B.pack()
 
-# label
+# --- SELEÇÃO DE JOGO ---
 label = ttk.Label(menu_frame, text="Jogos:")
 label.pack(fill=tk.X, padx=100, pady=5)
 
-# create a combobox
 selected_game = tk.StringVar()
 game_cb = ttk.Combobox(menu_frame, textvariable=selected_game)
 game = ''
 
-# set combo values
-game_cb['values'] = ['KARTEA', 'REPETEA']
-
-# prevent typing a value
+# Adicionado BEATHIT na lista
+game_cb['values'] = ['KARTEA', 'REPETEA', 'BEATHIT', 'PONG']
 game_cb['state'] = 'readonly'
-
-# place the widget
 game_cb.pack(fill=tk.X, padx=100, pady=5)
 
-
-# bind the selected value changes
 def game_changed(event):
     global game
     game = selected_game.get()
     jogador_cb['state'] = 'readonly'
     jogador_cb.set('')
+    
     if game == 'KARTEA':
         fase_cb['values'] = ['1', '2', '3']
         nivel_cb['values'] = ['1', '2', '3', '4', '5', '6']
+    elif game == 'BEATHIT' or game == 'PONG':
+        # BeatHit é jogo livre
+        fase_cb['values'] = ['1'] 
+        nivel_cb['values'] = ['1']
     else:
+        # RepeTEA
         fase_cb['values'] = ['1', '2', '3','4','5','6','7','8','9','10']
         nivel_cb['values'] = ['1', '2', '3', '4', '5']
 
@@ -119,27 +117,23 @@ def game_changed(event):
 
 game_cb.bind('<<ComboboxSelected>>', game_changed)
 
-
-# label
+# --- SELEÇÃO DE JOGADOR ---
 label = ttk.Label(menu_frame, text="Jogador:")
 label.pack(fill=tk.X, padx=100, pady=5)
 
-# create a combobox
 selected_jogador = tk.StringVar()
 jogador_cb = ttk.Combobox(menu_frame, textvariable=selected_jogador)
 
-arr_Jogadores = []
-
 def ler_nome_jogadores():
-    # Reading registered players
     path = os.getcwd() + "\Jogadores"
+    if not os.path.exists(path):
+        os.makedirs(path) 
     Jogadores = os.listdir(path)
-    #print(Jogadores)
 
     arr = []
     b = ''
-
     for a in Jogadores:
+        # Limpa os sufixos para pegar apenas o nome
         a = a.replace('_KarTEA_sessao.csv','')
         a = a.replace('_KarTEA_config.csv','')
         a = a.replace('_KarTEA_detalhado.csv','')
@@ -151,140 +145,177 @@ def ler_nome_jogadores():
         b = a
     return arr
 
-#print(arr_Jogadores)
 arr_Jogadores = ler_nome_jogadores()
-# set combo values
 jogador_cb['values'] = arr_Jogadores
-
-# prevent typing a value
 jogador_cb['state'] = 'disabled'
-
-# place the widget
 jogador_cb.pack(fill=tk.X, padx=100, pady=5)
 
-
-# bind the selected value changes
+# Variáveis Globais de Controle
 jogador = ''
 FASE = 0
 NIVEL = 0
 PLAYER_ARQ_CONFIG = ''
 
 def jogador_changed(event):
-    global jogador
+    global jogador, PLAYER_ARQ_CONFIG
     jogador = selected_jogador.get()
-    global PLAYER_ARQ_CONFIG
     PLAYER = "Jogadores/" + jogador
+    
+    # Define quais arquivos carregar baseado no jogo
     if game == 'KARTEA':
         PLAYER_ARQ = PLAYER + "_KarTEA_sessao.csv"
         PLAYER_ARQ_CONFIG = PLAYER + "_KarTEA_config.csv"
         PLAYER_ARQ_DET = PLAYER + "_KarTEA_detalhado.csv"
-    elif game == 'REPETEA':
+    elif game == 'REPETEA' or game == 'BEATHIT':
+        # BEATHIT usa a calibração do REPETEA
         PLAYER_ARQ = PLAYER + "_RepeTEA_sessao.csv"
         PLAYER_ARQ_CONFIG = PLAYER + "_RepeTEA_config.csv"
         PLAYER_ARQ_DET = PLAYER + "_RepeTEA_detalhado.csv"
 
     global FASE, NIVEL
-    FASE = arquivo.get_K_FASE(PLAYER_ARQ_CONFIG)
-    NIVEL = arquivo.get_K_NIVEL(PLAYER_ARQ_CONFIG)
-    fase_cb['state'] = 'readonly'
-    fase_cb.current(FASE-1)
-    nivel_cb['state'] = 'readonly'
-    nivel_cb.current(NIVEL-1)
-
+    try:
+        FASE = arquivo.get_K_FASE(PLAYER_ARQ_CONFIG)
+        NIVEL = arquivo.get_K_NIVEL(PLAYER_ARQ_CONFIG)
+        
+        fase_cb['state'] = 'readonly'
+        if FASE > 0: fase_cb.current(FASE-1)
+        
+        nivel_cb['state'] = 'readonly'
+        if NIVEL > 0: nivel_cb.current(NIVEL-1)
+    except:
+        print("Erro ao ler configuração do jogador ou arquivo novo.")
+        fase_cb['state'] = 'readonly'
+        nivel_cb['state'] = 'readonly'
 
 jogador_cb.bind('<<ComboboxSelected>>', jogador_changed)
 
-
-
+# --- BOTÃO CADASTRO ---
 def cadastrarCallback():
     show_cad()
 
-
 B = tk.Button(menu_frame, text ="Cadastrar Novo Jogador", command = cadastrarCallback)
-
 B.pack(fill=tk.X, padx=100, pady=10)
 
-# label
+# --- SELEÇÃO DE FASE ---
 label = ttk.Label(menu_frame, text="Fase:")
 label.pack(fill=tk.X, padx=100, pady=5)
 
-# create a combobox
 selected_fase = tk.StringVar()
 fase_cb = ttk.Combobox(menu_frame, textvariable=selected_fase)
-
-# set combo values
-#fase_cb['values'] = ['1', '2', '3']
-
-# prevent typing a value
 fase_cb['state'] = 'disabled'
-
-# place the widget
 fase_cb.pack(fill=tk.X, padx=100, pady=5)
 
-# bind the selected value changes
 def fase_changed(event):
-    arquivo.set_K_FASE(PLAYER_ARQ_CONFIG, int(selected_fase.get()))
+    if PLAYER_ARQ_CONFIG:
+        arquivo.set_K_FASE(PLAYER_ARQ_CONFIG, int(selected_fase.get()))
 
 fase_cb.bind('<<ComboboxSelected>>', fase_changed)
 
-
-# label
+# --- SELEÇÃO DE NÍVEL ---
 label = ttk.Label(menu_frame, text="Nível:")
 label.pack(fill=tk.X, padx=100, pady=5)
 
-# create a combobox
 selected_nivel = tk.StringVar()
 nivel_cb = ttk.Combobox(menu_frame, textvariable=selected_nivel)
-
-# set combo values
 nivel_cb['values'] = ['1', '2', '3', '4', '5', '6']
-
-# prevent typing a value
 nivel_cb['state'] = 'disabled'
-
-# place the widget
 nivel_cb.pack(fill=tk.X, padx=100, pady=5)
 
-nivel = ''
-# bind the selected value changes
 def nivel_changed(event):
-    arquivo.set_K_NIVEL(PLAYER_ARQ_CONFIG, int(selected_nivel.get()))
+    if PLAYER_ARQ_CONFIG:
+        arquivo.set_K_NIVEL(PLAYER_ARQ_CONFIG, int(selected_nivel.get()))
 
 nivel_cb.bind('<<ComboboxSelected>>', nivel_changed)
 
-
+# =========================================================================
+# FUNÇÃO JOGAR (CORRIGIDA E ROBUSTA)
+# =========================================================================
 def JogarCallback():
+    if not jogador:
+        tk.messagebox.showwarning("Aviso", "Selecione um jogador!")
+        return
+
     arquivo.set_Player(jogador)
-    arquivo.set_Fase(arquivo.get_K_FASE(PLAYER_ARQ_CONFIG))
-    arquivo.set_Nivel(arquivo.get_K_NIVEL(PLAYER_ARQ_CONFIG))
-    print("Jogador: ", arquivo.get_Player(), " Fase: ", arquivo.get_Fase(), " Nivel: ", arquivo.get_Nivel())
+    
+    # 1. LEITURA INTELIGENTE DA RESOLUÇÃO (Evita erro de coluna trocada)
+    largura_projetor = 800 # Valor de segurança padrão
+    
+    try:
+        if PLAYER_ARQ_CONFIG:
+            with open(PLAYER_ARQ_CONFIG, 'r') as csv_file:
+                csv_reader = csv.reader(csv_file)
+                next(csv_reader) # Pula cabeçalho
+                linha = next(csv_reader) # Lê a linha de dados
+                
+                # Tenta achar um número que pareça uma resolução (>600) na linha
+                encontrou = False
+                for item in linha:
+                    try:
+                        valor = int(item)
+                        if 600 <= valor <= 4000: # Faixa aceitável de resolução
+                            largura_projetor = valor
+                            encontrou = True
+                            break
+                    except:
+                        continue
+                
+                if not encontrou:
+                    print("Aviso: Resolução não encontrada no CSV. Usando 800.")
+
+    except Exception as e:
+        print(f"Erro ao ler arquivo de config: {e}. Usando padrão 800.")
+
+    # 2. Define Fase e Nível no Arquivo Global
+    try:
+        arquivo.set_Fase(arquivo.get_K_FASE(PLAYER_ARQ_CONFIG))
+        arquivo.set_Nivel(arquivo.get_K_NIVEL(PLAYER_ARQ_CONFIG))
+    except:
+        arquivo.set_Fase(1)
+        arquivo.set_Nivel(1)
+
+    print(f"Iniciando... Jogador: {arquivo.get_Player()} | Resolução: {largura_projetor}")
+    
+    # 3. Carrega Calibração
     settings.pontos_calibracao = arquivo.lerCalibracao()
-    x1 = settings.pontos_calibracao[2][0]
-    x2 = settings.pontos_calibracao[3][0]
-    print("x1= ", x1, "x2= ", x2)
+    if len(settings.pontos_calibracao) < 4:
+        print("AVISO: Calibração incompleta ou inexistente.")
+
+    # 4. Atualiza as variáveis globais de settings com a resolução correta
     settings.div0_pista = 0
-    settings.div1_pista = (SCREEN_WIDTH // 3)
-    settings.div2_pista = (2*(SCREEN_WIDTH//3))
-    settings.div3_pista = SCREEN_WIDTH
-    print("Pontos de Calibracao: ", settings.pontos_calibracao)
-    print("Div0: ", settings.div0_pista, " Div1: ", settings.div1_pista,"Div2: ", settings.div2_pista, " Div3: ", settings.div3_pista)
+    settings.div1_pista = (largura_projetor // 3)
+    settings.div2_pista = (2 * (largura_projetor // 3))
+    settings.div3_pista = largura_projetor
+    
+    print(f"Divisões de Pista configuradas: {settings.div1_pista}, {settings.div2_pista}")
 
-    TARGETS_MOVE_SPEED = arquivo.get_Nivel()
-
+    # 5. Inicia o Jogo
     if game == 'KARTEA':
         import KarTEA
+        reload(KarTEA)
         KarTEA.main()
+        
+    elif game == 'BEATHIT':
+        import BeatHit
+        reload(BeatHit)
+        # BeatHit roda direto no import, não tem main()
+    
+    elif game == 'PONG':
+        import Pong
+        from importlib import reload
+        reload(Pong)
+        
     else:
+        # RepeTEA
         import RepeTEA
-        # RepeTEA().main
+        reload(RepeTEA)
+        # RepeTEA não tem main() encapsulado, roda no import
 
 B = tk.Button(menu_frame, text ="Jogar", command = JogarCallback)
-
 B.pack()
 
 menu_frame.pack()
 
-#Frame Cadastro
+# --- TELA DE CADASTRO ---
 arr_Jogadores = ler_nome_jogadores()
 
 NomeString = tk.StringVar(cad_frame)
@@ -310,27 +341,23 @@ def cadastrarcallback():
     SNome = NomeString.get()
     SData = DataString.get()
     SObs = ObsString.get()
-    #print(SNome, SData, SObs)
-
 
     if SNome not in arr_Jogadores:
         arquivo.CadastrarJogador(SNome, SData, SObs)
         arr_Jogadores.append(SNome)
-        res = tk.messagebox.askquestion (title='Jogador cadastrado!', message='Jogador cadastrado com sucesso!\nDeseja cadastrar outro jogador?')
+        res = tk.messagebox.askquestion (title='Jogador cadastrado!', message='Sucesso!\nDeseja cadastrar outro?')
         if res == 'no':
             show_menu()
     else:
-        tk.messagebox.showerror(title='Erro!', message='Jogador com esse nome já esta cadastrado!')
+        tk.messagebox.showerror(title='Erro!', message='Nome já cadastrado!')
 
 B = tk.Button(cad_frame, text="Cadastrar Novo Jogador", command=cadastrarcallback)
-
 B.grid(column=0, row=3, padx=10, pady=10, sticky=tk.W)
 
 def cancelarcallback():
     show_menu()
 
 B = tk.Button(cad_frame, text="Cancelar", command=cancelarcallback)
-
 B.grid(column=1, row=3, padx=10, pady=10, sticky=tk.W)
 
 root.mainloop()
