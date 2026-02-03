@@ -3,14 +3,14 @@ from tkinter import ttk
 from PIL import Image, ImageTk
 import os
 import arquivo
-from settings import * # Importa as variáveis globais do settings
+from settings import *
 import cv2
 import numpy as np
 import settings
 import pygame
 import subprocess
-import csv # Necessário para ler a configuração
-from importlib import reload # Necessário para reiniciar os jogos sem fechar o menu
+import csv
+from importlib import reload
 
 from tkinter import messagebox
 
@@ -125,25 +125,48 @@ selected_jogador = tk.StringVar()
 jogador_cb = ttk.Combobox(menu_frame, textvariable=selected_jogador)
 
 def ler_nome_jogadores():
-    path = os.getcwd() + "\Jogadores"
+    # Caminho da pasta Jogadores
+    path = os.path.join(os.getcwd(), "Jogadores")
     if not os.path.exists(path):
-        os.makedirs(path) 
-    Jogadores = os.listdir(path)
+        os.makedirs(path)
+    
+    arquivos = os.listdir(path)
+    nomes_unicos = set() # 'set' remove duplicatas automaticamente
 
-    arr = []
-    b = ''
-    for a in Jogadores:
-        # Limpa os sufixos para pegar apenas o nome
-        a = a.replace('_KarTEA_sessao.csv','')
-        a = a.replace('_KarTEA_config.csv','')
-        a = a.replace('_KarTEA_detalhado.csv','')
-        a = a.replace('_RepeTEA.csv','')
-        a = a.replace('_RepeTEA_config.csv','')
-        a = a.replace('_RepeTEA_detalhado.csv','')
-        if a != b:
-            arr.append(a)
-        b = a
-    return arr
+    for arquivo in arquivos:
+        # 1. Ignora arquivos que não são CSV
+        if not arquivo.endswith(".csv"):
+            continue
+
+        # 2. Ignora arquivos de sistema/banco de dados
+        if "cadastro_pong" in arquivo:
+            continue
+
+        nome = arquivo
+        
+        # 3. Remove TODOS os sufixos conhecidos do KarTEA
+        nome = nome.replace('_KarTEA_sessao.csv', '')
+        nome = nome.replace('_KarTEA_config.csv', '')
+        nome = nome.replace('_KarTEA_detalhado.csv', '')
+        
+        # 4. Remove TODOS os sufixos conhecidos do RepeTEA
+        nome = nome.replace('_RepeTEA_sessao.csv', '')
+        nome = nome.replace('_RepeTEA_config.csv', '')
+        nome = nome.replace('_RepeTEA_detalhado.csv', '')
+        nome = nome.replace('_RepeTEA.csv', '') # Caso exista algum antigo
+        
+        # 5. Remove TODOS os sufixos conhecidos do Pong
+        nome = nome.replace('_Pong_Dados.csv', '')
+
+        # 6. Limpeza final (caso sobre apenas .csv ou espaços)
+        nome = nome.replace('.csv', '').strip()
+
+        # Só adiciona se sobrou algum nome e se não for um arquivo de configuração solto
+        if nome:
+            nomes_unicos.add(nome)
+
+    # Retorna a lista ordenada
+    return sorted(list(nomes_unicos))
 
 arr_Jogadores = ler_nome_jogadores()
 jogador_cb['values'] = arr_Jogadores
@@ -320,44 +343,82 @@ arr_Jogadores = ler_nome_jogadores()
 
 NomeString = tk.StringVar(cad_frame)
 DataString = tk.StringVar(cad_frame)
+SuporteString = tk.StringVar(cad_frame) # <--- NOVO VARIÁVEL
 ObsString = tk.StringVar(cad_frame)
 
+# Linha 0: Nome
 LNome = tk.Label(cad_frame, text="Nome: ")
 LNome.grid(column=0, row=0, sticky=tk.W)
 Nome = tk.Entry(cad_frame, width=20, textvariable=NomeString)
 Nome.grid(column=1, row=0, padx=10)
 
+# Linha 1: Data
 LData = tk.Label(cad_frame, text="Data de Nasc.: ")
 LData.grid(column=0, row=1, sticky=tk.W)
 Data = tk.Entry(cad_frame, width=20, textvariable=DataString)
 Data.grid(column=1, row=1, padx=10)
 
+# Linha 2: Nível de Suporte (NOVO CAMPO)
+LSuporte = tk.Label(cad_frame, text="Nível Suporte (Opcional): ")
+LSuporte.grid(column=0, row=2, sticky=tk.W)
+Suporte = tk.Entry(cad_frame, width=20, textvariable=SuporteString)
+Suporte.grid(column=1, row=2, padx=10)
+
+# Linha 3: Observação (Movido para baixo)
 LObs = tk.Label(cad_frame, text="Observação: ")
-LObs.grid(column=0, row=2, sticky=tk.W)
+LObs.grid(column=0, row=3, sticky=tk.W)
 Obs = tk.Entry(cad_frame, width=20, textvariable=ObsString)
-Obs.grid(column=1, row=2, padx=10)
+Obs.grid(column=1, row=3, padx=10)
 
 def cadastrarcallback():
     SNome = NomeString.get()
     SData = DataString.get()
+    SSuporte = SuporteString.get() # Pega o valor do suporte
     SObs = ObsString.get()
 
-    if SNome not in arr_Jogadores:
-        arquivo.CadastrarJogador(SNome, SData, SObs)
+    # LÓGICA DE SALVAMENTO:
+    # Como o sistema original (arquivo.py) espera apenas 3 dados (Nome, Data, Obs),
+    # nós adicionamos o "Nível de Suporte" dentro do texto de Observação.
+    # Assim, a informação fica salva sem quebrar os outros jogos.
+    
+    ObsFinal = SObs
+    if SSuporte:
+        if ObsFinal:
+            ObsFinal += f" | Suporte: {SSuporte}"
+        else:
+            ObsFinal = f"Suporte: {SSuporte}"
+
+    if SNome and SNome not in arr_Jogadores:
+        # Passa 'ObsFinal' que contém a observação + o nível de suporte
+        arquivo.CadastrarJogador(SNome, SData, ObsFinal)
+        
         arr_Jogadores.append(SNome)
-        res = tk.messagebox.askquestion (title='Jogador cadastrado!', message='Sucesso!\nDeseja cadastrar outro?')
+        # Atualiza a lista do menu principal imediatamente
+        jogador_cb['values'] = arr_Jogadores 
+        
+        res = tk.messagebox.askquestion(title='Sucesso!', message='Jogador cadastrado!\nDeseja cadastrar outro?')
+        
+        # Limpa os campos para o próximo cadastro
+        NomeString.set("")
+        DataString.set("")
+        SuporteString.set("")
+        ObsString.set("")
+        
         if res == 'no':
             show_menu()
+    elif not SNome:
+        tk.messagebox.showwarning(title='Atenção', message='O campo Nome é obrigatório!')
     else:
         tk.messagebox.showerror(title='Erro!', message='Nome já cadastrado!')
 
-B = tk.Button(cad_frame, text="Cadastrar Novo Jogador", command=cadastrarcallback)
-B.grid(column=0, row=3, padx=10, pady=10, sticky=tk.W)
+# Linha 4: Botões (Movido para baixo)
+B_Cadastrar = tk.Button(cad_frame, text="Cadastrar Novo Jogador", command=cadastrarcallback)
+B_Cadastrar.grid(column=0, row=4, padx=10, pady=10, sticky=tk.W)
 
 def cancelarcallback():
     show_menu()
 
-B = tk.Button(cad_frame, text="Cancelar", command=cancelarcallback)
-B.grid(column=1, row=3, padx=10, pady=10, sticky=tk.W)
+B_Cancelar = tk.Button(cad_frame, text="Cancelar", command=cancelarcallback)
+B_Cancelar.grid(column=1, row=4, padx=10, pady=10, sticky=tk.W)
 
 root.mainloop()

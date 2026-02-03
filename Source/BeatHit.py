@@ -7,9 +7,19 @@ import time
 from pygame import mixer
 import datetime
 import arquivo
+import os 
 
 pygame.init()
 
+# --- CONFIGURAÇÃO DE JANELA (MÓVEL E CENTRALIZADA) ---
+# 1. Centraliza a janela no monitor
+os.environ['SDL_VIDEO_CENTERED'] = '1'
+
+# 2. Descobre o tamanho do seu monitor e usa 90% dele
+info_tela = pygame.display.Info()
+LARGURA = int(info_tela.current_w * 0.90)
+ALTURA = int(info_tela.current_h * 0.90)
+# -----------------------------------------------------
 
 #CONFIGURAÇÃO INICIAL
 
@@ -40,15 +50,17 @@ except:
     jogador_config = ""
     pontos_calibracao_repetea = []
 
-# Leitura da Resolução e Configuração
+# Leitura da Configuração (Cores, Sons, Câmera)
+# Nota: Removemos a leitura de LARGURA/ALTURA daqui para usar a automática calculada acima
 try:
     with open(jogador_config, 'r') as csv_file:
         reader = csv.reader(csv_file)
         next(reader) # Pula header
         linha = next(reader)        
         
-        LARGURA = int(linha[13]) 
-        ALTURA = int(linha[14])
+        # Ignoramos a resolução do arquivo para usar a da tela automática
+        # LARGURA = int(linha[13]) 
+        # ALTURA = int(linha[14])
         
         # Tela de controle (webcam)
         LARGURA_CAM = int(linha[15]) 
@@ -57,8 +69,8 @@ try:
         paleta_cores = str(linha[17])
         paleta_sons = str(linha[18])
 except:
-    print("Erro na config. Usando padrão 800x600.")
-    LARGURA, ALTURA = 800, 600
+    print("Erro na config. Usando padrões.")
+    # Se der erro na leitura, mantemos a LARGURA/ALTURA de 90% calculada no início
     LARGURA_CAM, ALTURA_CAM = 640, 480
     paleta_cores = "padrao"
     paleta_sons = "padrao"
@@ -148,7 +160,8 @@ def desenhar_hud(display):
 
 # LOOP DO JOGO
 
-screen = pygame.display.set_mode((LARGURA, ALTURA))
+# 3. MUDANÇA AQUI: Adicionado pygame.RESIZABLE para permitir mover a janela
+screen = pygame.display.set_mode((LARGURA, ALTURA), pygame.RESIZABLE)
 pygame.display.set_caption('Beat & Hit')
 pygame.display.set_icon(icone)
 
@@ -180,7 +193,7 @@ while not gameExit:
                     px, py = transformar_perspectiva(x_norm, y_norm)
                     
                     # 2. desenhar Fundo
-                    screen.fill(preto)
+                    screen.fill(branco)
                     screen.blit(img_base_vazia, (0, 0)) # Imagem já está esticada
                     
                     # 3. Verificar Colisões (USANDO PORCENTAGENS DA TELA)
